@@ -178,7 +178,8 @@ def bq_load_from_gcs(uri: str) -> int:
                     format = 'CSV',
                     skip_leading_rows = 1,
                     null_marker = "",
-                    allow_quoted_newlines = true)
+                    allow_quoted_newlines = true,
+                    autodetect = false)
         """
     )
     # LOAD DATA does not return numDmlAffectedRows in the same field; query it.
