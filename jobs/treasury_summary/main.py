@@ -8,7 +8,6 @@ import csv
 import io
 import json
 import os
-import subprocess
 import sys
 import time
 import urllib.error
@@ -19,7 +18,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from common import bq, secrets  # noqa: E402
 
-GCLOUD = os.environ.get("GCLOUD_PATH", "gcloud")
 PROJECT = os.environ.get("BQ_PROJECT", "treasury-datamart-sandbox")
 DATASET = os.environ.get("BQ_DATASET", "finance_treasury")
 LOCATION = os.environ.get("BQ_LOCATION", "us")
@@ -57,13 +55,6 @@ BQ_COLUMNS = [
     "COUNTERPARTY", "NETWORK", "PROFILE", "STATE_OF_INCORPORATION",
     "EXTRACTED_TIMESTAMP",
 ]
-
-
-def _gcp_token() -> str:
-    return subprocess.run(
-        [GCLOUD, "auth", "print-access-token"],
-        capture_output=True, text=True, check=True
-    ).stdout.strip()
 
 
 def tableau_auth(pat_name: str, pat_secret: str) -> tuple[str, str]:
@@ -157,7 +148,7 @@ def rows_to_csv_bytes(rows: list[dict]) -> bytes:
 
 
 def upload_to_gcs(csv_bytes: bytes, file_name: str) -> str:
-    t = _gcp_token()
+    t = bq.access_token()
     url = (
         f"https://storage.googleapis.com/upload/storage/v1/b/{GCS_BUCKET}/o"
         f"?uploadType=media&name={file_name}"

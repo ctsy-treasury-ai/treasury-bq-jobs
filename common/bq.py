@@ -9,8 +9,8 @@ import requests
 _PROJECT = os.environ.get("BQ_PROJECT", "treasury-datamart-sandbox")
 
 
-def _token() -> str:
-    # In Cloud Run, ADC is available via the metadata server.
+def access_token() -> str:
+    """Return a valid GCP access token, preferring ADC in Cloud Run."""
     try:
         return subprocess.check_output(
             ["gcloud", "auth", "print-access-token"], text=True
@@ -21,6 +21,10 @@ def _token() -> str:
         creds, _ = default()
         creds.refresh(google.auth.transport.requests.Request())
         return creds.token
+
+
+def _token() -> str:
+    return access_token()
 
 
 def run_query(sql: str, wait: bool = True, project: str = _PROJECT) -> dict[str, Any]:
