@@ -1,57 +1,58 @@
-"""Daily sync of finance_treasury.fx_rate from CDP Impala fx_rates_dt.
+"""Daily sync of finance_treasury.fx_rate from Tableau.
 
-Intended to run as a Cloud Run job. Fetches FX rates for the target date from
-CDP, deletes any existing rows for that date in BigQuery, and inserts the fresh
-rows.
+Intended to run as a Cloud Run job. Fetches FX rates for the target date from the
+Tableau ``fx_rate`` workbook, deletes any existing rows for that date in
+BigQuery, and inserts the fresh rows.
 """
+import csv
+import io
 import os
 import sys
 from datetime import date, datetime, timedelta
 
-import requests
-import urllib3
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from common import bq, secrets  # noqa: E402
+from common.tableau import fetch_view_data, sign_in  # noqa: E402
 
 BQ_PROJECT = os.environ.get("BQ_PROJECT", "treasury-datamart-sandbox")
 BQ_DATASET = os.environ.get("BQ_DATASET", "finance_treasury")
-IMPALA_HOST = os.environ.get("IMPALA_HOST", "fdt-prod-datamart-master10.fdt-prod.bkje-jups.a5.cloudera.site")
-IMPALA_USER = os.environ.get("IMPALA_USER", "jason.tse")
-IMPALA_DB = os.environ.get("IMPALA_DB", "prd_crypto_treasury")
+TABLEAU_VIEW_ID = os.environ.get("TABLEAU_VIEW_ID", "9f86a882-b25a-462a-a721-9e6ea67fec6d")
 
 
-def fetch_cdp_fx(target_date: date, password: str):
-    """Return list of (symbol, exchange_rate) for target_date from CDP."""
-    from impala.dbapi import connect
+def parse_rate(value: str) -> float | None:
+    """Parse a Tableau measure value into a float, returning None when empty."""
+    if value is None:
+        return None
+    cleaned = value.strip().replace(",", "")
+    if cleaned in ("", "null", "NULL", "N/A"):
+        return None
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
 
-    conn = connect(
-        host=IMPALA_HOST,
-        port=443,
-        user=IMPALA_USER,
-        password=password,
-        database=IMPALA_DB,
-        auth_mechanism="LDAP",
-        use_http_transport=True,
-        http_path="cliservice",
-        use_ssl=True,
+
+def fetch_tableau_fx(target_date: date, pat_name: str, pat_secret: str) -> list[tuple[str, float]]:
+    """Return list of (symbol, exchange_rate) for target_date from Tableau."""
+    tab_token, site_id = sign_in(pat_name, pat_secret)
+    # Tableau accepts ISO date strings for the "Report Date" filter on this view.
+    date_param = target_date.strftime("%Y-%m-%d")
+    csv_text = fetch_view_data(
+        TABLEAU_VIEW_ID,
+        tab_token,
+        site_id,
+        params={"vf_Report%20Date": date_param},
     )
-    cursor = conn.cursor()
-    cursor.execute(
-        f"""
-        SELECT `symbol`, exchange_rate
-        FROM prd_crypto_treasury.fx_rates_dt
-        WHERE `year`={target_date.year}
-          AND `month`={target_date.month}
-          AND `day`={target_date.day}
-        """
-    )
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
+
+    reader = csv.DictReader(io.StringIO(csv_text.replace("\r\n", "\n").replace("\r", "\n")))
+    rows: list[tuple[str, float]] = []
+    for row in reader:
+        symbol = row.get("Reporting Currency", "").strip()
+        value = parse_rate(row.get("Measure Values", ""))
+        if not symbol or value is None:
+            continue
+        rows.append((symbol, value))
     return rows
 
 
@@ -66,13 +67,15 @@ def main() -> int:
     d_str = target_date.isoformat()
     print(f"[fx-rate-sync] Syncing FX rates for {d_str}")
 
-    impala_password = secrets.get_secret("impala-password")
-    rows = fetch_cdp_fx(target_date, impala_password)
+    pat_name = secrets.get_secret("tableau-pat-name")
+    pat_secret = secrets.get_secret("tableau-pat-secret")
+
+    rows = fetch_tableau_fx(target_date, pat_name, pat_secret)
     if not rows:
-        print(f"  {d_str}: no data from CDP, nothing to sync")
+        print(f"  {d_str}: no data from Tableau, nothing to sync")
         return 0
 
-    print(f"  {d_str}: fetched {len(rows)} symbols from CDP")
+    print(f"  {d_str}: fetched {len(rows)} symbols from Tableau")
 
     # Delete existing rows for the date
     bq.run_query(

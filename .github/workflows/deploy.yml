@@ -45,14 +45,14 @@ jobs:
             --image $IMAGE_TAG \
             --region $REGION \
             --command python,-m,jobs.fx_rate.main \
-            --set-secrets=IMPALA_PASSWORD=impala-password:latest \
+            --set-secrets=TABLEAU_PAT_NAME=tableau-pat-name:latest,TABLEAU_PAT_SECRET=tableau-pat-secret:latest \
             --service-account treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --max-retries 3 \
             || gcloud run jobs create fx-rate-sync-job \
             --image $IMAGE_TAG \
             --region $REGION \
             --command python,-m,jobs.fx_rate.main \
-            --set-secrets=IMPALA_PASSWORD=impala-password:latest \
+            --set-secrets=TABLEAU_PAT_NAME=tableau-pat-name:latest,TABLEAU_PAT_SECRET=tableau-pat-secret:latest \
             --service-account treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --max-retries 3
 
