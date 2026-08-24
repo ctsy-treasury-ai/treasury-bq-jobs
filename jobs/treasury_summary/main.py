@@ -170,20 +170,22 @@ def bq_delete(report_date: date) -> None:
     bq.run_query(sql)
 
 
-def bq_load_from_gcs(uri: str) -> int:
-    status = bq.run_query(
-        f"""
-        LOAD DATA INTO `{PROJECT}.{DATASET}.treasury_summary`
-        FROM FILES (uris = ['{uri}'],
-                    format = 'CSV',
-                    skip_leading_rows = 1,
-                    null_marker = "",
-                    allow_quoted_newlines = true,
-                    autodetect = false)
-        """
+def bq_load_from_gcs(uri: str) -> None:
+    """Load the CSV into the existing treasury_summary table.
+
+    Uses the BigQuery jobs API directly so we can disable schema autodetection
+    and keep the IS_* columns as STRING instead of letting BigQuery infer them
+    as BOOLEAN.
+    """
+    bq.load_table_from_gcs(
+        uri,
+        f"{PROJECT}.{DATASET}.treasury_summary",
+        skip_leading_rows=1,
+        null_marker="",
+        allow_quoted_newlines=True,
+        autodetect=False,
+        write_disposition="WRITE_APPEND",
     )
-    # LOAD DATA does not return numDmlAffectedRows in the same field; query it.
-    return 0
 
 
 def rebuild_deficit_tableau() -> None:
