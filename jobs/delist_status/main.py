@@ -52,10 +52,11 @@ def fetch_from_cdp() -> list[dict]:
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT DISTINCT source_currency, delist_status
+            SELECT DISTINCT reporting_currency, delist_status
             FROM prd_restricted.ctsy_currency_mappings
             WHERE delist_status != 'N/A'
-            ORDER BY source_currency
+              AND reporting_currency IS NOT NULL
+            ORDER BY reporting_currency
         """)
         rows = cursor.fetchall()
         print(f"Fetched {len(rows)} delisted currencies from CDP")
