@@ -133,15 +133,15 @@ jobs:
       - name: Create or update Cloud Scheduler (delist-status-sync)
         run: |
           gcloud scheduler jobs update http delist-status-sync-daily \
-            --schedule "30 8 * * *" \
-            --time-zone UTC \
+            --schedule "0 9 * * *" \
+            --time-zone "Asia/Hong_Kong" \
             --uri "https://${{ env.REGION }}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ env.PROJECT_ID }}/jobs/delist-status-sync-job:run" \
             --http-method POST \
             --oauth-service-account-email treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --location $REGION \
             || gcloud scheduler jobs create http delist-status-sync-daily \
-            --schedule "30 8 * * *" \
-            --time-zone UTC \
+            --schedule "0 9 * * *" \
+            --time-zone "Asia/Hong_Kong" \
             --uri "https://${{ env.REGION }}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ env.PROJECT_ID }}/jobs/delist-status-sync-job:run" \
             --http-method POST \
             --oauth-service-account-email treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
