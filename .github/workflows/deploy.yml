@@ -106,3 +106,43 @@ jobs:
             --http-method POST \
             --oauth-service-account-email treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --location $REGION
+
+      - name: Deploy delist-status-sync-job
+        run: |
+          gcloud run jobs update delist-status-sync-job \
+            --image $IMAGE_TAG \
+            --region $REGION \
+            --command python,-m,jobs.delist_status.main \
+            --set-secrets=CDP_PASSWORD=treasury-cdp-password:latest \
+            --set-env-vars=CDP_DATABASE=prd_restricted,CDP_USER=jason.tse \
+            --vpc-connector=treasury-ai-connector \
+            --vpc-egress=all-traffic \
+            --service-account treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --max-retries 3 \
+            || gcloud run jobs create delist-status-sync-job \
+            --image $IMAGE_TAG \
+            --region $REGION \
+            --command python,-m,jobs.delist_status.main \
+            --set-secrets=CDP_PASSWORD=treasury-cdp-password:latest \
+            --set-env-vars=CDP_DATABASE=prd_restricted,CDP_USER=jason.tse \
+            --vpc-connector=treasury-ai-connector \
+            --vpc-egress=all-traffic \
+            --service-account treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --max-retries 3
+
+      - name: Create or update Cloud Scheduler (delist-status-sync)
+        run: |
+          gcloud scheduler jobs update http delist-status-sync-daily \
+            --schedule "30 8 * * *" \
+            --time-zone UTC \
+            --uri "https://${{ env.REGION }}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ env.PROJECT_ID }}/jobs/delist-status-sync-job:run" \
+            --http-method POST \
+            --oauth-service-account-email treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --location $REGION \
+            || gcloud scheduler jobs create http delist-status-sync-daily \
+            --schedule "30 8 * * *" \
+            --time-zone UTC \
+            --uri "https://${{ env.REGION }}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ env.PROJECT_ID }}/jobs/delist-status-sync-job:run" \
+            --http-method POST \
+            --oauth-service-account-email treasury-bq-jobs@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --location $REGION
